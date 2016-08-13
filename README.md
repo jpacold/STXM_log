@@ -1,4 +1,3 @@
-# STXM_log
 STXM e-logbook generator
 Joe Pacold (Lawrence Berkeley Lab)
 ----------------------------
