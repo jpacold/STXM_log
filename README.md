@@ -1,6 +1,6 @@
 # STXM_log
 STXM e-logbook generator
-Joe Pacold, jipacold@lbl.gov
+Joe Pacold (Lawrence Berkeley Lab)
 ----------------------------
 Generates an easily readable pdf file summarizing one day
 of STXM data collection.
