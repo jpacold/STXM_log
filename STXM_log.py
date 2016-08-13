@@ -15,7 +15,7 @@
 # and more easily readable log of data collection
 # from one sample:
 #
-#  STXM_log_full                              STXM_log_live
+#  STXM_log                                   STXM_log_live
 #  ------------------------------------       ------------------------------------------
 #  All saved scans included                   Only image scans, line scans, and point scans included
 #  Filename is fixed by date                  Filename set by user
@@ -88,8 +88,9 @@ class scan():
             
             while "ScanDefinition" not in ln:
                 ln = infile.readline()
-            s = ln.split(";")
-            self.scantype = s[1][9:-1]
+            s = ln.split()
+            self.scantype = ' '.join(s[s.index("Type")+2:s.index("Flags")])[1:-2]
+            self.flags = ' '.join(s[s.index("Flags")+2:s.index("Dwell")])[1:-2]
             if verbose:
                 print(path.basename(hdrfile) + '\t' + self.scantype)
             
@@ -138,7 +139,7 @@ class scan():
                 self.xcenter = float(dims[0])
                 self.ycenter = float(dims[1][:-3])
             
-            else:
+            else:    
                 dims = [float(s[s.index(q) + 2][:-1]) for q in ["CentreXPos", "CentreYPos", "XRange", "YRange", "XStep", "YStep"]]
                 self.xcenter = dims[0]
                 self.ycenter = dims[1]
@@ -150,11 +151,33 @@ class scan():
                 self.xmax = dims[0] + 0.5*dims[2]
                 self.ymin = dims[1] - 0.5*dims[3]
                 self.ymax = dims[1] + 0.5*dims[3]
+                if "Multi-Region" in self.flags:
+                    ln = infile.readline()
+                    s = ln.split()
+                    self.nreg = 1
+                    self.regext = [[self.xmin, self.xmax, self.ymin, self.ymax]]
+                    while "CentreXPos" in s:
+                        self.nreg += 1
+                        dims = [float(s[s.index(q) + 2][:-1]) for q in ["CentreXPos", "CentreYPos", "XRange", "YRange", "XStep", "YStep"]]
+                        self.regext.append([dims[0]-0.5*dims[2], dims[0]+0.5*dims[2], dims[1]-0.5*dims[3], dims[1]+0.5*dims[3]])
+                        self.xmin = min(self.xmin, self.regext[-1][0])
+                        self.xmax = max(self.xmax, self.regext[-1][1])
+                        self.ymin = min(self.ymin, self.regext[-1][2])
+                        self.ymax = max(self.ymax, self.regext[-1][3])
+                        ln = infile.readline()
+                        s = ln.split()
+                    self.xcenter = 0.5*(self.xmin+self.xmax)
+                    self.ycenter = 0.5*(self.ymin+self.ymax)
+                    self.xrange = self.xmax - self.xmin
+                    self.yrange = self.ymax - self.ymin
         
         if "Point" not in self.scantype:
             ximlist = glob(hdrfile[:-4] + '*a*.xim')
             if ximlist != []:
-                self.img = np.loadtxt(ximlist[0])[::-1]
+                if "Multi-Region" in self.flags:
+                    self.img = [np.loadtxt(ximlist[n])[::-1] for n in range(self.nreg)]
+                else:
+                    self.img = np.loadtxt(ximlist[0])[::-1]
             else:
                 self.img = np.zeros((int(self.yrange/self.ystep), int(self.xrange/self.xstep)))
             if self.scantype == "NEXAFS Line Scan":
@@ -317,8 +340,14 @@ def gendisplay(s, p, subscans = None):
         p.set_ylabel('Zone plate position ($\mathregular{\\mu}$m)', labelpad = 1)
     
     else:
-        p.imshow(s.img, cmap = cm.gray, interpolation = 'nearest',
-                 extent = [s.xmin, s.xmax, s.ymin, s.ymax])
+        if "Multi-Region" in s.flags:
+            for n in range(s.nreg):
+                p.imshow(s.img[n], cmap = cm.gray, interpolation = 'nearest', extent = s.regext[n])
+            p.set_xlim(s.xmin, s.xmax)
+            p.set_ylim(s.ymin, s.ymax)
+        else:
+            p.imshow(s.img, cmap = cm.gray, interpolation = 'nearest',
+                     extent = [s.xmin, s.xmax, s.ymin, s.ymax])
     
     ex = p.axis()
     a = p.get_aspect()
@@ -338,8 +367,12 @@ def gendisplay(s, p, subscans = None):
         rightcol += str(np.around(s.energies[0], decimals = 1)) + ' eV'
     elif s.scantype == 'NEXAFS Image Scan':
         ximlist = glob(s.hdr[:-4] + '*a*.xim')
+        if "Multi-Region" in s.flags:
+            last_energy = s.energies[int(len(ximlist)/s.nreg)-1]
+        else:
+            last_energy = s.energies[len(ximlist)-1]
         lowercaption = str(np.around(s.energies[0], decimals = 1)) + ' eV' + ' - ' + \
-                       str(np.around(s.energies[len(ximlist)-1], decimals = 1)) + ' eV\n' + str(len(ximlist))
+                       str(np.around(last_energy, decimals = 1)) + ' eV\n' + str(len(ximlist))
         if len(ximlist) == 1:
             lowercaption += ' image'
         else:
@@ -354,12 +387,15 @@ def gendisplay(s, p, subscans = None):
     if s.scantype in ["Image Scan", "NEXAFS Image Scan", "OSA Scan", "Detector Scan"]:
         scale = max([x for x in [0.01,0.02,0.05,0.1,0.2,0.5,1,2,5,10,20,50,100,200,500,1000] if x <= 0.2*(s.xmax - s.xmin)])
         # Check if image is mostly dark or light in lower left
-        corner = s.img[int(0.8*len(s.img)):,:int(0.3*len(s.img[0]))]
-        m = np.mean(corner)
-        if abs(m - np.max(s.img)) < abs(m - np.min(s.img)):
-            scalecolor = '#222222'
+        if "Multi-Region" in s.flags:
+            scalecolor = '#000000'
         else:
-            scalecolor = '#dddddd'
+            corner = s.img[int(0.8*len(s.img)):,:int(0.3*len(s.img[0]))]
+            m = np.mean(corner)
+            if abs(m - np.max(s.img)) < abs(m - np.min(s.img)):
+                scalecolor = '#222222'
+            else:
+                scalecolor = '#dddddd'
         
         p.plot([s.xmin + 0.05*s.xrange, s.xmin + 0.05*s.xrange + scale],
              [s.ymin + 0.05*s.xrange, s.ymin + 0.05*s.xrange],
