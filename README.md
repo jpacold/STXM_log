@@ -1,8 +1,9 @@
 STXM e-logbook generator
-Generates an easily readable pdf file summarizing one day
-of STXM data collection.
 ----------------------------
 Joe Pacold (Lawrence Berkeley Lab)
+
+Generates an easily readable pdf file summarizing one day
+of STXM data collection.
 
 Requires numpy and matplotlib (using the Anaconda Python3
 distribution is recommended).
