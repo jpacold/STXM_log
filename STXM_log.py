@@ -4,8 +4,7 @@
 # the current date.
 # 
 # Scrapes the directory and uses the scan parameters
-# taken from .hdr files to generate logs (.pdf and
-# a descriptive .txt).
+# taken from .hdr files to generate a logbook (.pdf).
 #
 #
 # This is meant mainly to give an overview of the
@@ -146,11 +145,22 @@ class scan():
                 self.xrange = dims[2]
                 self.yrange = dims[3]
                 self.xstep = dims[4]
-                self.ystep = dims[5]
+                self.ystep = dims[5]                
                 self.xmin = dims[0] - 0.5*dims[2]
                 self.xmax = dims[0] + 0.5*dims[2]
                 self.ymin = dims[1] - 0.5*dims[3]
                 self.ymax = dims[1] + 0.5*dims[3]
+                
+                # Adjust dimensions for edge case when xrange or yrange is zero
+                if self.xrange == 0.0:
+                    self.xrange = self.ystep
+                    self.xmax += self.ystep
+                    self.xstep = self.ystep
+                if self.yrange == 0.0:
+                    self.yrange = self.xstep
+                    self.ymax += self.xstep
+                    self.ystep = self.xstep
+                
                 if "Multi-Region" in self.flags:
                     ln = infile.readline()
                     s = ln.split()
@@ -178,8 +188,11 @@ class scan():
                     self.img = [np.loadtxt(ximlist[n])[::-1] for n in range(self.nreg)]
                 else:
                     self.img = np.loadtxt(ximlist[0])[::-1]
+                    if len(self.img.shape) == 1:
+                        self.img = np.array([self.img])
             else:
                 self.img = np.zeros((int(self.yrange/self.ystep), int(self.xrange/self.xstep)))
+            
             if self.scantype == "NEXAFS Line Scan":
                 egrid = np.linspace(self.energies[0], self.energies[-1], 500, endpoint = False)
                 newimg = np.zeros((len(egrid), len(self.img)-1))
@@ -258,7 +271,7 @@ def scantree(sl):
                                 my_ymin = max(sl[i].ymin, sl[k].ymin)
                                 my_ymax = min(sl[i].ymax, sl[k].ymax)
                                 contained_area = (my_xmax-my_xmin)*(my_ymax-my_ymin)
-                                if contained_area/full_area >= 0.8 or \
+                                if contained_area >= 0.8*full_area or \
                                    (xmin_wide <= sl[k].xmin and sl[k].xmax <= xmax_wide and ymin_wide <= sl[k].ymin and sl[k].ymax <= ymax_wide):
                                     tree[i].append(k)
 
@@ -272,7 +285,7 @@ def scantree(sl):
         # into the ones acquired before and after it
         prev = [i for i in contains_j if i < j]
         post = [i for i in contains_j if i > j]
-                
+        
         # Ideally, we want to display scan j on the last
         # scan before it that contains it. Otherwise,
         # for example if the user zooms out from a small
