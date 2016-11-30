@@ -10,11 +10,11 @@
 # This is meant mainly to give an overview of the
 # entire day of data, for example to let staff
 # diagnose a problem. It has some differences from
-# STXM_log.py, which is meant to produce a shorter
-# and more easily readable log of data collection
-# from one sample:
+# STXM_log_interactive.py (under development),
+# which is meant to produce a shorter log of data
+# collection from one sample:
 #
-#  STXM_log                                   STXM_log_live
+#  STXM_log                                   STXM_log_interactive
 #  ------------------------------------       ------------------------------------------
 #  All saved scans included                   Only image scans, line scans, and point scans included
 #  Filename is fixed by date                  Filename set by user
@@ -41,7 +41,7 @@ from glob import glob
 
 
 class scan():
-    """Class that holds data on a single scan.
+    """Holds data on a single scan.
     As applicable, this may include:
         scantype, energies, dimensions, position,
         one image, map, associated spectrum files
@@ -319,12 +319,10 @@ def gendisplay(s, p, subscans = None):
     the subscans will be displayed on the image.
     
     The list of subscans follows this convention:
-        subscans = [nested_once_plot, nested_once_labels, nested_twice_plot]
+        subscans = [nested_once_plot, nested_once_labels]
         nested_once_plot: each entry is a two-element list [xcoords, ycoords]
                           specifying the bounding box or line or point for the scan
         nested_once_labels: the label to be attached to the trace obtained from nested_once_plot
-        nested_twice_plot: [xcoords, ycoords] for subscans of the scans in nested_once_plot
-                           (no corresponding labels)
     """
     
     p.get_xaxis().get_major_formatter().set_useOffset(False)
@@ -507,17 +505,6 @@ def gendisplay(s, p, subscans = None):
                     labelcoords.append([coords[0][0], coords[0][1], coords[1][0], coords[1][1]])
                     labels.append(lbl)
         
-        ## Sub-sub scans
-        # for i in range(len(subscans[2])):
-        #     coords = subscans[2][i]
-        #     if len(coords[1]) == 1:
-        #         # Point scan
-        #         plt.scatter(*coords, color = 'red')
-        #     else:
-        #         # Line scans and Image Scans
-        #         plt.plot(*coords, color = 'red')
-        
-        
         # Place labels
         dl = 0.005*max(s.xrange, s.yrange)
         bdy = 0.1*max(s.xrange, s.yrange)
@@ -605,7 +592,7 @@ def genspectrum(s, p, flist):
         p.locator_params(axis = 'x', tight = True, nbins = 6)
         p.plot(tmp[0], tmp[1], label = path.basename(f))
     
-    if len(flist) > 1:
+    if len(flist) > 1 or ("Point" not in s.scantype and path.basename(flist[0])[:-4] != s.label):
         p.legend(loc = 4, fontsize = 6.0)
 
     p.get_xaxis().get_major_formatter().set_useOffset(False)
@@ -683,7 +670,6 @@ def buildpdf(sl, tr, wdir, outdir = None, blname = ''):
                     
                     nested_once_plot = []
                     nested_once_labels = []
-                    nested_twice_plot = []
                     for n in nested_once:
                         subscan = sl[n]
                         nested_once_labels.append(subscan.shortlbl)
@@ -695,17 +681,7 @@ def buildpdf(sl, tr, wdir, outdir = None, blname = ''):
                             nested_once_plot.append([[subscan.xmin, subscan.xmax, subscan.xmax, subscan.xmin, subscan.xmin],
                                                      [subscan.ymin, subscan.ymin, subscan.ymax, subscan.ymax, subscan.ymin]])
                         
-                        for q in tr[n]:
-                            subscan = sl[q]
-                            if "Point" in subscan.scantype:
-                                nested_twice_plot.append([[subscan.xcenter],[subscan.ycenter]])
-                            elif "Line" in subscan.scantype:
-                                nested_twice_plot.append([[subscan.xmin, subscan.xmax],[subscan.ymin, subscan.ymax]])
-                            else:
-                                nested_twice_plot.append([[subscan.xmin, subscan.xmax, subscan.xmax, subscan.xmin, subscan.xmin],
-                                                         [subscan.ymin, subscan.ymin, subscan.ymax, subscan.ymax, subscan.ymin]])
-                        
-                    gendisplay(my_scan, panel, subscans = [nested_once_plot, nested_once_labels, nested_twice_plot])
+                    gendisplay(my_scan, panel, subscans = [nested_once_plot, nested_once_labels])
             
             pdf.savefig()
             print('Page ' + str(int(k/12)+1) + '/' + npages + ' done')
@@ -732,7 +708,7 @@ if __name__ == '__main__':
         if datetime.datetime.now().hour < 2:
             yesterday = datetime.date.today() - datetime.timedelta(1)
             print('Checking whether logfile for ' + yesterday.strftime('%y%m%d') + ' is complete...')
-            prevdir = path.join("Z:\\", yesterday.strftime('%y%m%d'))
+            prevdir = path.join(datadir, yesterday.strftime('%y%m%d'))
             logflist = glob(path.join(logdir, yesterday.strftime('%y%m%d') + '_log.pdf'))
             if logflist == [] or datetime.datetime.fromtimestamp(path.getmtime(logflist[0])).date() != datetime.date.today():
                 hdrlist = glob(path.join(prevdir, '*.hdr')) + glob(path.join(prevdir, '*', '*.hdr'))
