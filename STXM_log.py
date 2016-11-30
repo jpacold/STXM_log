@@ -10,11 +10,11 @@
 # This is meant mainly to give an overview of the
 # entire day of data, for example to let staff
 # diagnose a problem. It has some differences from
-# STXM_log.py, which is meant to produce a shorter
-# and more easily readable log of data collection
-# from one sample:
+# STXM_log_interactive.py (under development),
+# which is meant to produce a shorter log of data
+# collection from one sample:
 #
-#  STXM_log                                   STXM_log_live
+#  STXM_log                                   STXM_log_interactive
 #  ------------------------------------       ------------------------------------------
 #  All saved scans included                   Only image scans, line scans, and point scans included
 #  Filename is fixed by date                  Filename set by user
@@ -41,7 +41,7 @@ from glob import glob
 
 
 class scan():
-    """Class that holds data on a single scan.
+    """Holds data on a single scan.
     As applicable, this may include:
         scantype, energies, dimensions, position,
         one image, map, associated spectrum files
@@ -708,7 +708,7 @@ if __name__ == '__main__':
         if datetime.datetime.now().hour < 2:
             yesterday = datetime.date.today() - datetime.timedelta(1)
             print('Checking whether logfile for ' + yesterday.strftime('%y%m%d') + ' is complete...')
-            prevdir = path.join("Z:\\", yesterday.strftime('%y%m%d'))
+            prevdir = path.join(datadir, yesterday.strftime('%y%m%d'))
             logflist = glob(path.join(logdir, yesterday.strftime('%y%m%d') + '_log.pdf'))
             if logflist == [] or datetime.datetime.fromtimestamp(path.getmtime(logflist[0])).date() != datetime.date.today():
                 hdrlist = glob(path.join(prevdir, '*.hdr')) + glob(path.join(prevdir, '*', '*.hdr'))
